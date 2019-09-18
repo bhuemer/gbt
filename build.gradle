@@ -24,6 +24,8 @@ gradlePlugin {
     plugins {
         scalaPlugin {
             id = 'com.github.bhuemer.gbt'
+            displayName = 'Scala compiler plugin'
+            description = 'Scala compiler plugin based on SBTs Zinc compiler'
             implementationClass = 'com.github.bhuemer.gbt.ScalaPlugin'
         }
     }
@@ -37,7 +39,7 @@ pluginBundle {
 
     plugins {
         scalaPlugin {
-            displayName = 'Scala Compiler Plugin'
+            displayName = 'Scala compiler plugin'
         }
     }
 }
