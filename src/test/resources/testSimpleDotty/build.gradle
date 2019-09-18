@@ -7,7 +7,7 @@ scalac {
 }
 
 repositories {
-    mavenCentral()
+    jcenter()
 }
 
 dependencies {
