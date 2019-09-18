@@ -1,0 +1,17 @@
+plugins {
+    id 'com.github.bhuemer.gbt'
+}
+
+scalac {
+    scalaVersion = '0.18.1-RC1'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    scalac 'ch.epfl.lamp:dotty-compiler_0.18:0.18.1-RC1'
+    scalac 'ch.epfl.lamp:dotty-sbt-bridge:0.18.1-RC1'
+    implementation 'ch.epfl.lamp:dotty-library_0.18:0.18.1-RC1'
+}

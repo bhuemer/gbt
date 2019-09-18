@@ -41,11 +41,9 @@ import org.gradle.plugins.ide.idea.model.IdeaModule;
 
 import javax.annotation.Nonnull;
 import java.io.File;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  *
@@ -62,6 +60,7 @@ public class ScalaPlugin implements Plugin<Project> {
     @Override
     public void apply(@Nonnull Project project) {
         configureRequiredPlugins(project);
+        configureConfigurations(project);
         configureExtensions(project);
         configureSourceSets(project);
         configureIdeModules(project);
@@ -76,6 +75,26 @@ public class ScalaPlugin implements Plugin<Project> {
 
         // Enable this to make sure that Gradle's IDE plugins recognize this as a Scala module/project
         project.getPluginManager().apply(ScalaLanguagePlugin.class);
+    }
+
+    private void configureConfigurations(Project project) {
+        project.getConfigurations().create("scalac")
+            .setVisible(false)
+            .setDescription("Dependencies required for the Scala compiler")
+            .defaultDependencies(dependencies -> {
+                ScalaPluginExtension runtime = project.getExtensions().getByType(ScalaPluginExtension.class);
+
+                Dependency scalaCompiler = project.getDependencies().create("org.scala-lang:scala-compiler:" + runtime.getScalaVersion());
+                Dependency bridgeCompiler = project.getDependencies().create("org.scala-sbt:compiler-bridge_" + runtime.getScalaMajorVersion() + ":1.3.0");
+
+                if (logger.isDebugEnabled()) {
+                    String dependencyInfo = String.join(
+                            "\n", scalaCompiler.toString(), bridgeCompiler.toString());
+                    logger.debug("Adding default dependencies for compilation: \n" + dependencyInfo);
+                }
+                dependencies.add(scalaCompiler);
+                dependencies.add(bridgeCompiler);
+            });
     }
 
     private void configureExtensions(Project project) {
@@ -229,11 +248,7 @@ public class ScalaPlugin implements Plugin<Project> {
      */
     private Set<File> resolveScalacClasspath(ScalaPluginExtension runtime, Project project) {
         try {
-            Dependency scalaCompiler = project.getDependencies().create("org.scala-lang:scala-compiler:" + runtime.getScalaVersion());
-            Dependency bridgeCompiler = project.getDependencies().create("org.scala-sbt:compiler-bridge_" + runtime.getScalaMajorVersion() + ":1.3.0");
-            return project.getConfigurations()
-                .detachedConfiguration(scalaCompiler, bridgeCompiler)
-                .resolve();
+            return project.getConfigurations().getByName("scalac").resolve();
         } catch (GradleException ex) {
             throw new GradleException("Could not determine the Scalac classpath. Make sure that you are (a) " +
                 "using the correct Scala version and (b) have at least one repository defined. To configure the " +

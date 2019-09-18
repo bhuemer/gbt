@@ -171,6 +171,23 @@ public class ScalaPluginTest {
     }
 
     /**
+     * Makes sure that Dotty projects can be compiled with this plugin as well.
+     */
+    @Test
+    public void compileDottyProjects() throws Exception {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleDotty")) {
+            BuildResult result = runner.withArguments("compileScala").build();
+
+            assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
+            assertThat(result.getTasks().get(1), was(":compileScala", TaskOutcome.SUCCESS));
+
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/EnumTypes.class").exists());
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/EnumTypes.tasty").exists());
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/EnumTypes$ListEnum$.class").exists());
+        }
+    }
+
+    /**
      * Creates a new Hamcrest matcher for the given build task.
      */
     private static Matcher<BuildTask> was(final String path, final TaskOutcome outcome) {

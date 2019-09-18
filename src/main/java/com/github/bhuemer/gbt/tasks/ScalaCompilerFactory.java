@@ -49,9 +49,10 @@ final class ScalaCompilerFactory {
 
     static ScalaCompiler createCompiler(String scalaVersion, Set<File> scalacJars, Logger logger) {
         ScalaInstance scalaInstance = createScalaInstance(scalaVersion, scalacJars);
-        RawCompiler compiler = new RawCompiler(scalaInstance, ClasspathOptionsUtil.boot(), new LoggerAdapter(logger));
+        RawCompiler compiler = new RawCompiler(scalaInstance, ClasspathOptionsUtil.auto(), new LoggerAdapter(logger));
         return (files, classpath, outputDir) -> {
             try {
+                System.out.println(scalaInstance);
                 compiler.apply(
                     JavaConverters.collectionAsScalaIterable(files).toSeq(),
                     JavaConverters.collectionAsScalaIterable(classpath).toSeq(),
@@ -70,8 +71,8 @@ final class ScalaCompilerFactory {
      */
     private static ScalaInstance createScalaInstance(String scalaVersion, Set<File> scalacJars) {
         ClassLoader classLoader = createClassLoader(scalacJars);
-        File libraryJar = findByName(scalacJars, "scala-library");
-        File compilerJar = findByName(scalacJars, "scala-compiler");
+        File libraryJar = findByName(scalacJars, "library");
+        File compilerJar = findByName(scalacJars, "compiler");
         return new ScalaInstance(
             scalaVersion,
             classLoader,
@@ -91,7 +92,8 @@ final class ScalaCompilerFactory {
     private static File findByName(Set<File> scalacJars, String name) {
         Objects.requireNonNull(name, "The given name must not be null.");
         return scalacJars.stream()
-            .filter(file -> file != null && file.getName().startsWith(name))
+            .filter(Objects::nonNull)
+            .filter(file -> file.getName().startsWith("scala-" + name) || file.getName().startsWith("dotty-" + name))
             .findFirst()
             .orElseThrow(() ->
                 new GradleException("Cannot find the JAR file for '" + name + "' in '" + scalacJars + "'.")
