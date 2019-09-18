@@ -52,7 +52,6 @@ final class ScalaCompilerFactory {
         RawCompiler compiler = new RawCompiler(scalaInstance, ClasspathOptionsUtil.auto(), new LoggerAdapter(logger));
         return (files, classpath, outputDir) -> {
             try {
-                System.out.println(scalaInstance);
                 compiler.apply(
                     JavaConverters.collectionAsScalaIterable(files).toSeq(),
                     JavaConverters.collectionAsScalaIterable(classpath).toSeq(),
