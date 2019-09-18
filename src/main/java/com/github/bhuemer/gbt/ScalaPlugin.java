@@ -22,31 +22,25 @@
 package com.github.bhuemer.gbt;
 
 import com.github.bhuemer.gbt.tasks.ScalaCompile;
-import groovy.util.Node;
-import org.codehaus.groovy.runtime.InvokerHelper;
-import org.gradle.BuildAdapter;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.file.SourceDirectorySet;
-import org.gradle.api.internal.tasks.DefaultScalaSourceSet;
-import org.gradle.api.invocation.Gradle;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
-import org.gradle.api.plugins.Convention;
 import org.gradle.api.plugins.JavaBasePlugin;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
-import org.gradle.api.tasks.ScalaSourceSet;
+import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.language.scala.plugins.ScalaLanguagePlugin;
 import org.gradle.plugins.ide.idea.model.IdeaModel;
 
 import javax.annotation.Nonnull;
 import java.io.File;
+import java.util.HashSet;
 import java.util.Set;
-
-import static org.gradle.plugins.ide.internal.generator.XmlPersistableConfigurationObject.findOrCreateFirstChildWithAttributeValue;
 
 /**
  *
@@ -65,6 +59,7 @@ public class ScalaPlugin implements Plugin<Project> {
         configureRequiredPlugins(project);
         configureExtensions(project);
         configureSourceSets(project);
+        configureIdeModules(project);
     }
 
     /**
@@ -78,28 +73,6 @@ public class ScalaPlugin implements Plugin<Project> {
         project.getPluginManager().apply(ScalaLanguagePlugin.class);
     }
 
-    private void configureOptionalPlugins(Project project) {
-        project.getGradle().addBuildListener(new BuildAdapter() {
-            @Override
-            public void projectsEvaluated(Gradle gradle) {
-                IdeaModel model = project.getExtensions().findByType(IdeaModel.class);
-                if (model == null) {
-                    return;
-                }
-
-                model.getModule().getIml().withXml(provider -> {
-                    Node iml = provider.asNode();
-
-                    Node newModuleRootManager = findOrCreateFirstChildWithAttributeValue(iml, "component", "name", "NewModuleRootManager");
-
-                    Node sdkLibrary = findOrCreateFirstChildWithAttributeValue(newModuleRootManager, "orderEntry", "name", "scala-sdk-2.18");
-                    sdkLibrary.attributes().put("type", "library");
-                    sdkLibrary.attributes().put("level", "project");
-                });
-            }
-        });
-    }
-
     private void configureExtensions(Project project) {
         ScalaPluginExtension configuration =
             project.getExtensions().create(ScalaPluginExtension.EXTENSION_NAME, ScalaPluginExtension.class);
@@ -107,43 +80,97 @@ public class ScalaPlugin implements Plugin<Project> {
             .withType(ScalaCompile.class)
             .configureEach(scalaCompile -> {
                 scalaCompile.setScalaVersion(configuration.getScalaVersion());
+                // TODO: Defer this classpath resolution to when the compiler actually runs.
                 scalaCompile.setScalacJars(resolveScalacClasspath(configuration, project));
             });
     }
 
-    private void configureSourceSets(Project project) {
-        project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets().all(sourceSet -> {
-            ScalaSourceSet scalaSourceSet = sourceSet.getExtensions().create(
-                "scala", DefaultScalaSourceSet.class, String.format("%s Scala source", sourceSet.getName()), project.getObjects());
-            Convention convention = (Convention) InvokerHelper.getProperty(sourceSet, "convention");
-            convention.getPlugins().put("scala", scalaSourceSet);
-
-            final SourceDirectorySet scalaDirectorySet = scalaSourceSet.getScala();
+    /**
+     * Creates additional source directory sets (e.g. `src/main/scala` and `src/test/scala`) and configures
+     * the relevant compile task for each of these source sets (e.g. `compileScala` and `compileTestScala`).
+     */
+    private void configureSourceSets(final Project project) {
+        final SourceSetContainer sourceSets = getSourceSets(project);
+        sourceSets.all(sourceSet -> {
+            final SourceDirectorySet scalaDirectorySet = project.getObjects().sourceDirectorySet(
+                sourceSet.getName(), String.format("%s Scala source", sourceSet.getName()));
             scalaDirectorySet.srcDir(project.file(String.format("src/%s/scala", sourceSet.getName())));
-            scalaDirectorySet.setOutputDir(project.provider(() ->
+            scalaDirectorySet.setOutputDir(
                 // Set the output directory to something like "classes/scala/main"
                 project.getBuildDir().toPath()
                     .resolve("classes")
                     .resolve(scalaDirectorySet.getName())
                     .resolve(sourceSet.getName())
                     .toFile()
-            ));
+            );
+            sourceSet.getExtensions().add("scala", scalaDirectorySet);
 
-            // Register a corresponding Scala compile task for this source set,
-            // e.g. compileScale for src/main, compileTestScala for src/test, etc.
+            // Register the corresponding Scala compile task for this source set
             project.getTasks().register(
                 sourceSet.getCompileTaskName("scala"),
                 ScalaCompile.class,
                 scalaCompile -> {
+                    // TODO: Make this also depend on compileScala if we are configuring compileTestScala, etc.
                     scalaCompile.dependsOn(sourceSet.getCompileJavaTaskName());
                     scalaCompile.setDescription(String.format("Compiles %s Scala source.", sourceSet.getName()));
                     scalaCompile.setSource(scalaDirectorySet);
                     scalaCompile.setClasspath(
                         sourceSet.getCompileClasspath().plus(project.files(sourceSet.getJava().getOutputDir()))
                     );
-                    scalaCompile.setDestinationDir(project.provider(scalaDirectorySet::getOutputDir));
+                    scalaCompile.setDestinationDir(scalaDirectorySet.getOutputDir());
                 }
             );
+        });
+    }
+
+    @SuppressWarnings({"ConstantConditions", "unchecked"})
+    private void configureIdeModules(final Project project) {
+        project.afterEvaluate(ignored -> {
+            // Only do this once all the IDE plugins have been registered already.
+            final IdeaModel model = project.getExtensions().findByType(IdeaModel.class);
+            if (model == null) {
+                return;
+            }
+
+            getSourceSets(project).all(sourceSet -> {
+                // If somebody adds custom source sets for integration tests, etc. we cannot automatically
+                // figure out whether we should add those scala sources as `srcDir` or `testSrcDir`, so we
+                // will limit ourselves here to the source sets that we can definitely figure out.
+                if (!SourceSet.MAIN_SOURCE_SET_NAME.equals(sourceSet.getName()) &&
+                    !SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName())) {
+                    logger.debug("Not configuring IDE module for source set '" + sourceSet.getName()
+                        + "': Unknown source set.");
+                    return;
+                }
+
+                SourceDirectorySet scalaDirectorySet =
+                    (SourceDirectorySet) sourceSet.getExtensions().findByName("scala");
+                if (scalaDirectorySet == null) {
+                    logger.debug("Not configuring IDE module for source set '" + sourceSet.getName()
+                        + "': No Scala directory set available.");
+                    return;
+                }
+
+                boolean isTest = SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName());
+
+                Set<File> srcDirs = new HashSet<>();
+                if (isTest) {
+                    srcDirs.addAll(model.getModule().getTestSourceDirs());
+                } else {
+                    srcDirs.addAll(model.getModule().getSourceDirs());
+                }
+                srcDirs.addAll(scalaDirectorySet.getSrcDirs());
+                if (isTest) {
+                    model.getModule().setTestSourceDirs(srcDirs);
+                } else {
+                    model.getModule().setSourceDirs(srcDirs);
+                }
+            });
+
+            final ScalaPluginExtension extension = project.getExtensions().findByType(ScalaPluginExtension.class);
+            if (extension == null || extension.getScalaVersion() == null) {
+                logger.info("Not configuring the Scala SDK.");
+            }
         });
     }
 
@@ -164,6 +191,10 @@ public class ScalaPlugin implements Plugin<Project> {
                 "build.gradle file. The version that is configured currently is " +
                     "'" + runtime.getScalaVersion() + "'.", ex);
         }
+    }
+
+    private static SourceSetContainer getSourceSets(Project project) {
+        return project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets();
     }
 
 }

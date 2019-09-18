@@ -24,6 +24,7 @@ package com.github.bhuemer.gbt.tasks;
 import com.github.bhuemer.gbt.tasks.support.LoggerAdapter;
 import org.gradle.api.GradleException;
 import org.gradle.api.logging.Logger;
+import sbt.internal.inc.CompileFailed;
 import sbt.internal.inc.RawCompiler;
 import sbt.internal.inc.ScalaInstance;
 import scala.Option;
@@ -50,12 +51,16 @@ final class ScalaCompilerFactory {
         ScalaInstance scalaInstance = createScalaInstance(scalaVersion, scalacJars);
         RawCompiler compiler = new RawCompiler(scalaInstance, ClasspathOptionsUtil.boot(), new LoggerAdapter(logger));
         return (files, classpath, outputDir) -> {
-            compiler.apply(
-                JavaConverters.collectionAsScalaIterable(files).toSeq(),
-                JavaConverters.collectionAsScalaIterable(classpath).toSeq(),
-                outputDir,
-                JavaConverters.collectionAsScalaIterable(Collections.<String>emptyList()).toSeq()
-            );
+            try {
+                compiler.apply(
+                    JavaConverters.collectionAsScalaIterable(files).toSeq(),
+                    JavaConverters.collectionAsScalaIterable(classpath).toSeq(),
+                    outputDir,
+                    JavaConverters.collectionAsScalaIterable(Collections.<String>emptyList()).toSeq()
+                );
+            } catch (CompileFailed ex) {
+                throw new GradleException("Compilation failed.", ex);
+            }
         };
     }
 
