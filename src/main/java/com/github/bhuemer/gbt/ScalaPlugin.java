@@ -36,6 +36,7 @@ import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.language.scala.plugins.ScalaLanguagePlugin;
 import org.gradle.plugins.ide.idea.model.IdeaModel;
+import org.gradle.plugins.ide.idea.model.IdeaModule;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -107,6 +108,10 @@ public class ScalaPlugin implements Plugin<Project> {
             scalaDirectorySet.setOutputDir(determineOutputDirFor(project, sourceSet));
             sourceSet.getExtensions().add("scala", scalaDirectorySet);
 
+            // TODO: Ideally we would adjust the various sourceSet classpaths as well to make it easier for
+            // other people to build additional tasks without having to know too much about how to build these
+            // classpaths themselves?
+
             // Register the corresponding Scala compile task for this source set
             project.getTasks().register(
                 sourceSet.getCompileTaskName("scala"),
@@ -169,19 +174,18 @@ public class ScalaPlugin implements Plugin<Project> {
                     return;
                 }
 
-                boolean isTest = SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName());
-
-                Set<File> srcDirs = new HashSet<>();
-                if (isTest) {
-                    srcDirs.addAll(model.getModule().getTestSourceDirs());
-                } else {
-                    srcDirs.addAll(model.getModule().getSourceDirs());
+                IdeaModule module = model.getModule();
+                if (module == null) {
+                    logger.debug("Not configuring IDE module for source set '" + sourceSet.getName()
+                        + "': Idea module is null.");
+                    return;
                 }
-                srcDirs.addAll(scalaDirectorySet.getSrcDirs());
+
+                boolean isTest = SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName());
                 if (isTest) {
-                    model.getModule().setTestSourceDirs(srcDirs);
+                    module.setTestSourceDirs(union(module.getTestSourceDirs(), scalaDirectorySet.getSrcDirs()));
                 } else {
-                    model.getModule().setSourceDirs(srcDirs);
+                    module.setSourceDirs(union(module.getSourceDirs(), scalaDirectorySet.getSrcDirs()));
                 }
             });
 
@@ -228,6 +232,13 @@ public class ScalaPlugin implements Plugin<Project> {
 
     private static SourceSetContainer getSourceSets(Project project) {
         return project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets();
+    }
+
+    private static <T> Set<T> union(Set<T> a, Set<T> b) {
+        Set<T> result = new HashSet<>();
+        result.addAll(a);
+        result.addAll(b);
+        return result;
     }
 
 }
