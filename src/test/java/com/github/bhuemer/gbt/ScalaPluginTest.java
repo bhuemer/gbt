@@ -22,46 +22,121 @@
 package com.github.bhuemer.gbt;
 
 import org.gradle.testkit.runner.BuildResult;
-import org.gradle.testkit.runner.GradleRunner;
-import org.junit.Rule;
+import org.gradle.testkit.runner.BuildTask;
+import org.gradle.testkit.runner.TaskOutcome;
+import org.hamcrest.BaseMatcher;
+import org.hamcrest.Description;
+import org.hamcrest.Matcher;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Objects;
+
+import static junit.framework.TestCase.assertTrue;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ScalaPluginTest {
 
-    @Rule
-    public final TemporaryFolder testProjectDir = new TemporaryFolder();
-
+    /**
+     * Makes sure that the Scala compile tasks are registered correctly and appear in the list of all tasks.
+     */
     @Test
-    public void compileScalaAppearsAsTask() throws Exception {
-        File buildFile = testProjectDir.newFile("build.gradle");
-        writeFile(buildFile, "plugins { id 'com.github.bhuemer.gbt' } \nscalac { scalaVersion = '2.12.8' }\nrepositories { mavenCentral() }\ndependencies { implementation 'org.scala-lang:scala-library:2.12.8' }");
-
-        testProjectDir.newFolder("src", "main", "scala");
-
-        File mainApp = testProjectDir.newFile("src/main/scala/App.scala");
-        writeFile(mainApp, "object App { println(\"Hello World!\") }");
-
-        BuildResult result = GradleRunner.create()
-            .withProjectDir(testProjectDir.getRoot())
-            .withArguments("compileScala", "--stacktrace")
-            .withPluginClasspath()
-            .withDebug(true)
-            .build();
-
-        System.out.println(result.getOutput());
+    public void compileScalaAppearsAsTask() throws IOException {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+            BuildResult result = runner.withArguments("tasks", "--all").build();
+            assertThat(result.getOutput(), containsString("compileScala - Compiles main Scala source."));
+            assertThat(result.getOutput(), containsString("compileTestScala - Compiles test Scala source."));
+        }
     }
 
-    /** Writes the given content to the temporary file. */
-    private static void writeFile(File destination, String content) throws IOException {
-        try (BufferedWriter output = new BufferedWriter(new FileWriter(destination))) {
-            output.write(content);
+    /**
+     * Makes sure that the `compileScala` task produces the expected .class files.
+     */
+    @Test
+    public void compileScalaProducesClassFiles() throws IOException {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+            BuildResult result = runner.withArguments("compileScala").build();
+
+            assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
+            assertThat(result.getTasks().get(1), was(":compileScala", TaskOutcome.SUCCESS));
+
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App.class").exists());
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App$.class").exists());
         }
+    }
+
+    /**
+     * Makes sure that Scala 2.13 projects can be compiled successfully as well.
+     */
+    @Test
+    public void compileScalaWorksWithScala213() throws IOException {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject213")) {
+            BuildResult result = runner.withArguments("compileScala").build();
+
+            assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
+            assertThat(result.getTasks().get(1), was(":compileScala", TaskOutcome.SUCCESS));
+
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App.class").exists());
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App$.class").exists());
+        }
+    }
+
+    /**
+     * Makes sure that errors are displayed correctly when you try to compile a 2.13 project with a 2.12 compiler.
+     */
+    @Test
+    public void compileWithWrongScalaVersion() throws IOException {
+        try (GradleRunner runner = GradleRunner
+                .forProject("testSimpleProject213")
+                .withBuildFile(
+                    "plugins {                      ",
+                    "   id 'com.github.bhuemer.gbt' ",
+                    "}                              ",
+                    "                               ",
+                    "scalac {                       ",
+                    "   scalaVersion = '2.12.8'     ",
+                    "}                              ",
+                    "                               ",
+                    "repositories {                 ",
+                    "   jcenter()                   ",
+                    "}                              ",
+                    "                               ",
+                    "dependencies {                 ",
+                    "   implementation 'org.scala-lang:scala-library:2.12.8'",
+                    "}"
+                )) {
+            BuildResult result = runner.withArguments("compileScala").buildAndFail();
+
+            assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
+            assertThat(result.getTasks().get(1), was(":compileScala", TaskOutcome.FAILED));
+
+            assertThat(result.getOutput(), containsString("object jdk is not a member of package scala"));
+        }
+    }
+
+    /**
+     * Creates a new Hamcrest matcher for the given build task.
+     */
+    private static Matcher<BuildTask> was(final String path, final TaskOutcome outcome) {
+        return new BaseMatcher<BuildTask>() {
+            @Override
+            public void describeTo(Description description) {
+                description.appendText(path).appendText("=").appendText(outcome.name());
+            }
+
+            @Override
+            public boolean matches(Object item) {
+                if (!(item instanceof BuildTask)) {
+                    return false;
+                }
+
+                BuildTask buildTask = (BuildTask) item;
+                return Objects.equals(path, buildTask.getPath())
+                    && Objects.equals(outcome, buildTask.getOutcome());
+            }
+        };
     }
 
 }

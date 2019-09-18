@@ -99,7 +99,7 @@ public class ScalaPlugin implements Plugin<Project> {
                 // Set the output directory to something like "classes/scala/main"
                 project.getBuildDir().toPath()
                     .resolve("classes")
-                    .resolve(scalaDirectorySet.getName())
+                    .resolve("scala")
                     .resolve(sourceSet.getName())
                     .toFile()
             );
