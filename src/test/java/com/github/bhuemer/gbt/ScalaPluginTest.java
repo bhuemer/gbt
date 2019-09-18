@@ -35,6 +35,7 @@ import java.util.Objects;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ScalaPluginTest {
@@ -64,6 +65,24 @@ public class ScalaPluginTest {
 
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App.class").exists());
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App$.class").exists());
+        }
+    }
+
+    /**
+     * Makes sure that the `compileTestScala` task depends correctly on all other relevant tasks and has access to
+     * output generated from them (i.e. the classpath is set up correctly).
+     */
+    @Test
+    public void compileTestScalaDependsOnCompileScala() throws IOException {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+            BuildResult result = runner.withArguments("compileTestScala").build();
+
+            assertThat(result.getTasks(), hasItem(was(":compileJava", TaskOutcome.NO_SOURCE)));
+            assertThat(result.getTasks(), hasItem(was(":compileScala", TaskOutcome.SUCCESS)));
+            assertThat(result.getTasks(), hasItem(was(":compileTestJava", TaskOutcome.NO_SOURCE)));
+            assertThat(result.getTasks(), hasItem(was(":compileTestScala", TaskOutcome.SUCCESS)));
+
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/test/AppSpec.class").exists());
         }
     }
 

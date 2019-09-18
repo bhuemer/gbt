@@ -52,7 +52,7 @@ public class ScalaPlugin implements Plugin<Project> {
     private static final Logger logger = Logging.getLogger(ScalaPlugin.class);
 
     /**
-     *
+     * Entry point that applies this plugin to the given project.
      */
     @Override
     public void apply(@Nonnull Project project) {
@@ -90,19 +90,21 @@ public class ScalaPlugin implements Plugin<Project> {
      * the relevant compile task for each of these source sets (e.g. `compileScala` and `compileTestScala`).
      */
     private void configureSourceSets(final Project project) {
-        final SourceSetContainer sourceSets = getSourceSets(project);
+        SourceSetContainer sourceSets = getSourceSets(project);
+
+        // Both should really exist, but we don't strictly insist on it here
+        SourceSet mainSourceSet = sourceSets.findByName(SourceSet.MAIN_SOURCE_SET_NAME);
+        SourceSet testSourceSet = sourceSets.findByName(SourceSet.TEST_SOURCE_SET_NAME);
+
+        // Register the Scala source directory set and the compile task for all source sets, even if it's
+        // neither the main nor the test source set. This allows you to configure source sets for integration
+        // tests, etc. and they'll get picked up as well. However, the task dependencies need to be set manually
+        // in those cases (e.g. `classpath` and `dependsOn`) .. Some meaningful defaults will already be set.
         sourceSets.all(sourceSet -> {
             final SourceDirectorySet scalaDirectorySet = project.getObjects().sourceDirectorySet(
                 sourceSet.getName(), String.format("%s Scala source", sourceSet.getName()));
             scalaDirectorySet.srcDir(project.file(String.format("src/%s/scala", sourceSet.getName())));
-            scalaDirectorySet.setOutputDir(
-                // Set the output directory to something like "classes/scala/main"
-                project.getBuildDir().toPath()
-                    .resolve("classes")
-                    .resolve("scala")
-                    .resolve(sourceSet.getName())
-                    .toFile()
-            );
+            scalaDirectorySet.setOutputDir(determineOutputDirFor(project, sourceSet));
             sourceSet.getExtensions().add("scala", scalaDirectorySet);
 
             // Register the corresponding Scala compile task for this source set
@@ -110,14 +112,30 @@ public class ScalaPlugin implements Plugin<Project> {
                 sourceSet.getCompileTaskName("scala"),
                 ScalaCompile.class,
                 scalaCompile -> {
-                    // TODO: Make this also depend on compileScala if we are configuring compileTestScala, etc.
-                    scalaCompile.dependsOn(sourceSet.getCompileJavaTaskName());
+                    if (SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName()) && mainSourceSet != null) {
+                        scalaCompile.dependsOn(
+                            sourceSet.getCompileJavaTaskName(),             // :compileTestJava
+                            mainSourceSet.getCompileTaskName("scala")       // :compileScala
+                        );
+
+                        // For test compile tasks make sure that outputs from all the
+                        // other relevant tasks are available during compilation.
+                        scalaCompile.setClasspath(sourceSet.getCompileClasspath().plus(project.files(
+                            sourceSet.getJava().getOutputDir(),             // classes for src/test/java
+                            mainSourceSet.getJava().getOutputDir(),         // classes for src/main/java
+                            determineOutputDirFor(project, mainSourceSet)   // classes for src/main/scala
+                        )));
+                    } else {
+                        // By default just make it depend on the equivalent Java compile task.
+                        scalaCompile.dependsOn(sourceSet.getCompileJavaTaskName());
+                        scalaCompile.setClasspath(
+                            sourceSet.getCompileClasspath().plus(project.files(sourceSet.getJava().getOutputDir()))
+                        );
+                    }
+
                     scalaCompile.setDescription(String.format("Compiles %s Scala source.", sourceSet.getName()));
-                    scalaCompile.setSource(scalaDirectorySet);
-                    scalaCompile.setClasspath(
-                        sourceSet.getCompileClasspath().plus(project.files(sourceSet.getJava().getOutputDir()))
-                    );
                     scalaCompile.setDestinationDir(scalaDirectorySet.getOutputDir());
+                    scalaCompile.setSource(scalaDirectorySet);
                 }
             );
         });
@@ -191,6 +209,21 @@ public class ScalaPlugin implements Plugin<Project> {
                 "build.gradle file. The version that is configured currently is " +
                     "'" + runtime.getScalaVersion() + "'.", ex);
         }
+    }
+
+    /**
+     * Determines the output directory for the Scala compile task that handles the given source set, e.g.
+     * `build/classes/scala/main` for the main source set, etc.
+     *
+     * @param project The project for which we are configuring the Scala plugin
+     * @param sourceSet The source set for which we want to determine the output directory
+     */
+    private static File determineOutputDirFor(Project project, SourceSet sourceSet) {
+        return project.getBuildDir().toPath()
+            .resolve("classes")
+            .resolve("scala")
+            .resolve(sourceSet.getName())
+            .toFile();
     }
 
     private static SourceSetContainer getSourceSets(Project project) {

@@ -94,7 +94,7 @@ final class ScalaCompilerFactory {
             .filter(file -> file != null && file.getName().startsWith(name))
             .findFirst()
             .orElseThrow(() ->
-                new IllegalStateException("Cannot find the JAR file for '" + name + "' in '" + scalacJars + "'.")
+                new GradleException("Cannot find the JAR file for '" + name + "' in '" + scalacJars + "'.")
             );
     }
 
