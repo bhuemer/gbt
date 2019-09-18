@@ -1,0 +1,41 @@
+version: 2
+
+jobs:
+  build:
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "build.gradle" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+
+      - save_cache:
+          paths:
+            - ~/.gradle
+          key: v1-dependencies--{{ checksum "build.gradle" }}
+
+      - run:
+          name: Compiling and running tests
+          command: ./gradlew test
+          when: always
+
+      - run:
+          name: Saving test results
+          command: |
+            mkdir -p ~/test-results/junit/
+            find . -type f -regex ".*/build/test-results/.*xml" -exec cp {} ~/test-results/junit/ \;
+          when: always
+
+      - store_test_results:
+          path: ~/test-results
+
+      - store_artifacts:
+          path: ~/test-results/junit
+
+workflows:
+  version: 2
+  workflow:
+    jobs:
+      - build
