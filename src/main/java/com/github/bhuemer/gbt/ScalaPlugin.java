@@ -22,6 +22,7 @@
 package com.github.bhuemer.gbt;
 
 import com.github.bhuemer.gbt.tasks.ScalaCompile;
+import groovy.util.Node;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -41,6 +42,9 @@ import org.gradle.plugins.ide.idea.model.IdeaModule;
 import javax.annotation.Nonnull;
 import java.io.File;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -146,12 +150,21 @@ public class ScalaPlugin implements Plugin<Project> {
         });
     }
 
-    @SuppressWarnings({"ConstantConditions", "unchecked"})
+    /**
+     * Makes sure that if an IDE plugin is available in this project, it will be configured correctly.
+     *
+     * At the moment this only takes care of IntelliJ IDEA:
+     *  1) Makes sure that the source folders are added to the modules correctly.
+     *  2) Makes sure that a Scala SDK is declared. Ideally we'd also define what the Scala SDK is, but
+     *     we'll leave that for later.
+     */
     private void configureIdeModules(final Project project) {
         project.afterEvaluate(ignored -> {
             // Only do this once all the IDE plugins have been registered already.
-            final IdeaModel model = project.getExtensions().findByType(IdeaModel.class);
-            if (model == null) {
+            IdeaModule module = Optional.ofNullable(project.getExtensions().findByType(IdeaModel.class))
+                .map(IdeaModel::getModule)
+                .orElse(null);
+            if (module == null) {
                 return;
             }
 
@@ -174,13 +187,6 @@ public class ScalaPlugin implements Plugin<Project> {
                     return;
                 }
 
-                IdeaModule module = model.getModule();
-                if (module == null) {
-                    logger.debug("Not configuring IDE module for source set '" + sourceSet.getName()
-                        + "': Idea module is null.");
-                    return;
-                }
-
                 boolean isTest = SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName());
                 if (isTest) {
                     module.setTestSourceDirs(union(module.getTestSourceDirs(), scalaDirectorySet.getSrcDirs()));
@@ -189,10 +195,32 @@ public class ScalaPlugin implements Plugin<Project> {
                 }
             });
 
-            final ScalaPluginExtension extension = project.getExtensions().findByType(ScalaPluginExtension.class);
+            ScalaPluginExtension extension = project.getExtensions().findByType(ScalaPluginExtension.class);
             if (extension == null || extension.getScalaVersion() == null) {
                 logger.info("Not configuring the Scala SDK.");
+                return;
             }
+
+            // Manually modify .iml files to include an <orderEntry /> node that refers to the Scala SDK
+            // Note that this unfortunately assumes that the SDK has been configured already. However,
+            // seeing that those are defined globally (i.e. independent of individual projects), it seems
+            // okay-ish to ask the users to define those once through a few clicks. Will fix this properly
+            // later.
+            module.getIml().withXml(xmlProvider -> {
+                Node node = xmlProvider.asNode();
+                for (Object obj : node.children()) {
+                    if (obj instanceof Node) {
+                        Node child = (Node) obj;
+                        if ("NewModuleRootManager".equals(child.attribute("name"))) {
+                            Map<String, String> attributes = new LinkedHashMap<>();
+                            attributes.put("type", "library");
+                            attributes.put("name", String.format("scala-sdk-%s", extension.getScalaVersion()));
+                            attributes.put("level", "application");
+                            child.appendNode("orderEntry", attributes);
+                        }
+                    }
+                }
+            });
         });
     }
 
@@ -236,8 +264,8 @@ public class ScalaPlugin implements Plugin<Project> {
 
     private static <T> Set<T> union(Set<T> a, Set<T> b) {
         Set<T> result = new HashSet<>();
-        result.addAll(a);
-        result.addAll(b);
+        if (a != null) result.addAll(a);
+        if (b != null) result.addAll(b);
         return result;
     }
 

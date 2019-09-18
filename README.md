@@ -15,7 +15,7 @@ plugins {
     id 'com.github.bhuemer.gbt' version '0.1'
 }
 
-// By default it will use Scala 2.12.8, but you can configure the version:
+// By default it will use Scala 2.12.8, but you can configure the version.
 scalac {
     scalaVersion '2.13.0'
 }
@@ -27,8 +27,9 @@ repositories {
 }
 
 dependencies {
-    // The plugin neither infers the Scala version from this nor 
-    // will it add this dependency automatically for you .. 
+    // The plugin neither infers the Scala version from this dependency nor 
+    // will it add it automatically for you. If you don't have it declared
+    // compilation will fail.
     implementation 'org.scala-lang:scala-library:2.13.0'
 }
 ```

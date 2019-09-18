@@ -21,6 +21,7 @@
  */
 package com.github.bhuemer.gbt;
 
+import org.gradle.api.GradleException;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.BuildTask;
 import org.gradle.testkit.runner.TaskOutcome;
@@ -30,13 +31,13 @@ import org.hamcrest.Matcher;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 import static junit.framework.TestCase.assertTrue;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
 
 public class ScalaPluginTest {
 
@@ -44,7 +45,7 @@ public class ScalaPluginTest {
      * Makes sure that the Scala compile tasks are registered correctly and appear in the list of all tasks.
      */
     @Test
-    public void compileScalaAppearsAsTask() throws IOException {
+    public void compileScalaAppearsAsTask() throws Exception {
         try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
             BuildResult result = runner.withArguments("tasks", "--all").build();
             assertThat(result.getOutput(), containsString("compileScala - Compiles main Scala source."));
@@ -56,7 +57,7 @@ public class ScalaPluginTest {
      * Makes sure that the `compileScala` task produces the expected .class files.
      */
     @Test
-    public void compileScalaProducesClassFiles() throws IOException {
+    public void compileScalaProducesClassFiles() throws Exception {
         try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
             BuildResult result = runner.withArguments("compileScala").build();
 
@@ -73,7 +74,7 @@ public class ScalaPluginTest {
      * output generated from them (i.e. the classpath is set up correctly).
      */
     @Test
-    public void compileTestScalaDependsOnCompileScala() throws IOException {
+    public void compileTestScalaDependsOnCompileScala() throws Exception {
         try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
             BuildResult result = runner.withArguments("compileTestScala").build();
 
@@ -90,7 +91,7 @@ public class ScalaPluginTest {
      * Makes sure that Scala 2.13 projects can be compiled successfully as well.
      */
     @Test
-    public void compileScalaWorksWithScala213() throws IOException {
+    public void compileScalaWorksWithScala213() throws Exception {
         try (GradleRunner runner = GradleRunner.forProject("testSimpleProject213")) {
             BuildResult result = runner.withArguments("compileScala").build();
 
@@ -106,7 +107,7 @@ public class ScalaPluginTest {
      * Makes sure that errors are displayed correctly when you try to compile a 2.13 project with a 2.12 compiler.
      */
     @Test
-    public void compileWithWrongScalaVersion() throws IOException {
+    public void compileWithWrongScalaVersion() throws Exception {
         try (GradleRunner runner = GradleRunner
                 .forProject("testSimpleProject213")
                 .withBuildFile(
@@ -132,6 +133,40 @@ public class ScalaPluginTest {
             assertThat(result.getTasks().get(1), was(":compileScala", TaskOutcome.FAILED));
 
             assertThat(result.getOutput(), containsString("object jdk is not a member of package scala"));
+        }
+    }
+
+    /**
+     * Makes sure that IntelliJ IDEA files are generated correctly for Scala projects.
+     */
+    @Test
+    public void generateSimpleIdeaProject() throws Exception {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleProjectWithIdea")) {
+            BuildResult result = runner.withArguments("cleanIdea", "idea").build();
+
+            assertThat(result.getTasks(), hasItem(was(":ideaProject",   TaskOutcome.SUCCESS)));
+            assertThat(result.getTasks(), hasItem(was(":ideaModule",    TaskOutcome.SUCCESS)));
+            assertThat(result.getTasks(), hasItem(was(":ideaWorkspace", TaskOutcome.SUCCESS)));
+            assertThat(result.getTasks(), hasItem(was(":idea",          TaskOutcome.SUCCESS)));
+
+            // Make sure that all the relevant IDEA files have been generated
+            File[] ideaFiles = runner.getProjectDir().listFiles(file ->
+                file.getName().endsWith(".iml") ||
+                file.getName().endsWith(".ipr") ||
+                file.getName().endsWith(".iws")
+            );
+            assertThat(ideaFiles, arrayWithSize(3));
+
+            File imlFile = Stream.of(ideaFiles)
+                .filter(file -> file.getName().endsWith(".iml"))
+                .findFirst()
+                // This shouldn't ever be possible at this stage but nonetheless
+                .orElseThrow(() -> new GradleException("Couldn't find the .iml file in output directory."));
+
+            // Make sure that the Scala SDK has been declared in the .iml file
+            String imlFileContent = String.join("\n", Files.readAllLines(imlFile.toPath()));
+            assertThat(imlFileContent, containsString(
+                "<orderEntry type=\"library\" name=\"scala-sdk-2.12.8\" level=\"application\"/>"));
         }
     }
 

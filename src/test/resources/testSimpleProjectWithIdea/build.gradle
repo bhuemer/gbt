@@ -1,0 +1,16 @@
+plugins {
+    id 'com.github.bhuemer.gbt'
+    id 'idea'
+}
+
+scalac {
+    scalaVersion = '2.12.8'
+}
+
+repositories {
+    jcenter()
+}
+
+dependencies {
+    implementation 'org.scala-lang:scala-library:2.12.8'
+}
