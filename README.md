@@ -3,7 +3,7 @@
 [![CircleCI](https://circleci.com/gh/bhuemer/gbt.svg?style=shield)](https://circleci.com/gh/bhuemer/gbt)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A plugin that enables the use of SBTs most recent incremental compilers in Gradle Scala projects.
+A plugin that enables the use of SBTs most recent compilers in Gradle Scala projects.
 
 ## Installation
 

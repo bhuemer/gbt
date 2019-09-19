@@ -35,6 +35,8 @@ public class ScalaPluginExtension {
 
     private String scalaVersion;
 
+    private String scalaSdkName;
+
     /**
      * Returns the Scala version that is configured for this project, or a default Scala version.
      */
@@ -61,6 +63,21 @@ public class ScalaPluginExtension {
             throw new IllegalStateException(
                 "Scala version '" + getScalaVersion() + "' is not supported. Cannot determine the major version.");
         }
+    }
+
+    /**
+     * Returns the name of the Scala SDK to use when generating IDEA modules, if available.
+     */
+    public String getScalaSdkName() {
+        return scalaSdkName;
+    }
+
+    /**
+     * Allows you to configure the name of the Scala SDK to use when generating IDEA modules.
+     */
+    @SuppressWarnings("unused")
+    public void setScalaSdkName(String scalaSdkName) {
+        this.scalaSdkName = scalaSdkName;
     }
 
 }

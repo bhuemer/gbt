@@ -45,6 +45,17 @@ import java.io.File;
 @SuppressWarnings({"UnstableApiUsage", "unused"})
 public class ScalaPlugin implements Plugin<Project> {
 
+    /**
+     * The name to use to configure the scalac dependencies, e.g.
+     * ```
+     * dependencies {
+     *     scalac 'ch.epfl.lamp:dotty-compiler_0.18:0.18.1-RC1'
+     *     scalac 'ch.epfl.lamp:dotty-sbt-bridge:0.18.1-RC1'
+     * }
+     * ```
+     */
+    private static final String CONFIGURATION_NAME = ScalaPluginExtension.EXTENSION_NAME;
+
     /** The logger instance for this class. */
     private static final Logger logger = Logging.getLogger(ScalaPlugin.class);
 
@@ -69,7 +80,7 @@ public class ScalaPlugin implements Plugin<Project> {
     }
 
     private void configureConfigurations(Project project) {
-        project.getConfigurations().create("scalac")
+        project.getConfigurations().create(CONFIGURATION_NAME)
             .setVisible(false)
             .setDescription("Dependencies required for the Scala compiler")
             .defaultDependencies(dependencies -> {
@@ -95,7 +106,9 @@ public class ScalaPlugin implements Plugin<Project> {
             .withType(ScalaCompile.class)
             .configureEach(scalaCompile -> {
                 scalaCompile.setScalaVersion(configuration.getScalaVersion());
-                scalaCompile.setScalacClasspath(project.getConfigurations().getByName("scalac"));
+                scalaCompile.setScalacClasspath(
+                    project.getConfigurations().getByName(CONFIGURATION_NAME)
+                );
             });
     }
 
@@ -204,8 +217,12 @@ public class ScalaPlugin implements Plugin<Project> {
             });
 
             ScalaPluginExtension extension = project.getExtensions().getByType(ScalaPluginExtension.class);
-            IdeaConfigurer.includeScalaSdkDependency(
-                project, String.format("scala-sdk-%s", extension.getScalaVersion()));
+            String scalaSdkName = extension.getScalaSdkName();
+            if (scalaSdkName == null || scalaSdkName.isEmpty()) {
+                scalaSdkName = String.format("scala-sdk-%s", extension.getScalaVersion());
+            }
+
+            IdeaConfigurer.includeScalaSdkDependency(project, scalaSdkName);
         });
     }
 

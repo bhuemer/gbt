@@ -55,7 +55,7 @@ public class ScalaPluginTest {
      */
     @Test
     public void compileScalaAppearsAsTask() throws Exception {
-        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+        try (GradleRunner runner = GradleRunner.forProject("testSimple")) {
             BuildResult result = runner.withArguments("tasks", "--all").build();
             assertThat(result.getOutput(), containsString("compileScala - Compiles main Scala source."));
             assertThat(result.getOutput(), containsString("compileTestScala - Compiles test Scala source."));
@@ -67,7 +67,7 @@ public class ScalaPluginTest {
      */
     @Test
     public void compileScalaProducesClassFiles() throws Exception {
-        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+        try (GradleRunner runner = GradleRunner.forProject("testSimple")) {
             BuildResult result = runner.withArguments("compileScala").build();
 
             assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
@@ -82,7 +82,7 @@ public class ScalaPluginTest {
      */
     @Test
     public void compileScalaClassFilesAreIncludedInJarFiles() throws Exception {
-        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+        try (GradleRunner runner = GradleRunner.forProject("testSimple")) {
             BuildResult result = runner.withArguments("assemble").build();
 
             // Make sure that compileScala was executed despite not being invoked explicitly
@@ -110,7 +110,7 @@ public class ScalaPluginTest {
      */
     @Test
     public void compileTestScalaDependsOnCompileScala() throws Exception {
-        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+        try (GradleRunner runner = GradleRunner.forProject("testSimple")) {
             BuildResult result = runner.withArguments("compileTestScala").build();
 
             assertThat(result.getTasks(), hasItem(was(":compileJava", TaskOutcome.NO_SOURCE)));
@@ -127,7 +127,7 @@ public class ScalaPluginTest {
      */
     @Test
     public void compileScalaWorksWithScala213() throws Exception {
-        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject213")) {
+        try (GradleRunner runner = GradleRunner.forProject("testSimple213")) {
             BuildResult result = runner.withArguments("compileScala").build();
 
             assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
@@ -144,7 +144,7 @@ public class ScalaPluginTest {
     @Test
     public void compileWithWrongScalaVersion() throws Exception {
         try (GradleRunner runner = GradleRunner
-                .forProject("testSimpleProject213")
+                .forProject("testSimple213")
                 .withBuildFile(
                     "plugins {                      ",
                     "   id 'com.github.bhuemer.gbt' ",
@@ -172,11 +172,37 @@ public class ScalaPluginTest {
     }
 
     /**
+     * Makes sure to produce helpful error messages when scala library dependencies are not declared.
+     */
+    @Test
+    public void compileWithoutScalaLibrary() throws Exception {
+        try (GradleRunner runner = GradleRunner
+                .forProject("testSimple")
+                .withBuildFile(
+                    "plugins {                      ",
+                    "   id 'com.github.bhuemer.gbt' ",
+                    "}                              ",
+                    "                               ",
+                    "scalac {                       ",
+                    "   scalaVersion = '2.12.8'     ",
+                    "}                              ",
+                    "                               ",
+                    "repositories {                 ",
+                    "   jcenter()                   ",
+                    "}                              "
+                )) {
+            BuildResult result = runner.withArguments("compileScala").buildAndFail();
+            assertThat(result.getOutput(),
+                containsString("Cannot find the JAR file for 'scala-library' or 'dotty-library'"));
+        }
+    }
+
+    /**
      * Makes sure that IntelliJ IDEA files are generated correctly for Scala projects.
      */
     @Test
     public void generateSimpleIdeaProject() throws Exception {
-        try (GradleRunner runner = GradleRunner.forProject("testSimpleProjectWithIdea")) {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleWithIdea")) {
             BuildResult result = runner.withArguments("cleanIdea", "idea").build();
 
             assertThat(result.getTasks(), hasItem(was(":ideaProject",   TaskOutcome.SUCCESS)));

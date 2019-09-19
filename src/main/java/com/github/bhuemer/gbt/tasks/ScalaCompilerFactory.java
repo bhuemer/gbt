@@ -52,6 +52,9 @@ final class ScalaCompilerFactory {
         RawCompiler compiler = new RawCompiler(scalaInstance, ClasspathOptionsUtil.auto(), new LoggerAdapter(logger));
         return (files, classpath, outputDir) -> {
             try {
+                // Make sure that the scala-library is actually available on the classpath.
+                findByName(classpath, "library");
+
                 compiler.apply(
                     JavaConverters.collectionAsScalaIterable(files).toSeq(),
                     JavaConverters.collectionAsScalaIterable(classpath).toSeq(),
@@ -88,14 +91,18 @@ final class ScalaCompilerFactory {
     /**
      * Returns the file that matches the given name or throws an exception otherwise.
      */
-    private static File findByName(Set<File> scalacJars, String name) {
+    private static File findByName(Set<File> jarFiles, String name) {
         Objects.requireNonNull(name, "The given name must not be null.");
-        return scalacJars.stream()
+        return jarFiles.stream()
             .filter(Objects::nonNull)
             .filter(file -> file.getName().startsWith("scala-" + name) || file.getName().startsWith("dotty-" + name))
             .findFirst()
             .orElseThrow(() ->
-                new GradleException("Cannot find the JAR file for '" + name + "' in '" + scalacJars + "'.")
+                new GradleException(
+                    "Cannot find the JAR file for 'scala-" + name + "' or 'dotty-" + name + "' in '" + jarFiles + "' " +
+                        "Did you forget to declare a dependency? Please make sure that the correct version of the " +
+                        "scala library is on the compile classpath, e.g. by adding " +
+                        "`implementation 'org.scala-lang:scala-library:2.12.8'`.")
             );
     }
 
