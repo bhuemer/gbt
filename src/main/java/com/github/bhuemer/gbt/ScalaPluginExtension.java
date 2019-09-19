@@ -28,7 +28,7 @@ package com.github.bhuemer.gbt;
 public class ScalaPluginExtension {
 
     /** The name of the DSL block to use to configure the Scala plugin. */
-    static final String EXTENSION_NAME = "scalac";
+    public static final String EXTENSION_NAME = "scalac";
 
     /** By default we'll assume Scala 2.12 is used for Scala projects. */
     private static final String DEFAULT_VERSION_SCALA = "2.12.8";

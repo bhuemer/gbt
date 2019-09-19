@@ -22,7 +22,6 @@
 package com.github.bhuemer.gbt;
 
 import com.github.bhuemer.gbt.tasks.ScalaCompile;
-import groovy.util.Node;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -36,14 +35,10 @@ import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.language.scala.plugins.ScalaLanguagePlugin;
-import org.gradle.plugins.ide.idea.model.IdeaModel;
-import org.gradle.plugins.ide.idea.model.IdeaModule;
 
 import javax.annotation.Nonnull;
 import java.io.File;
-import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.Set;
 
 /**
  *
@@ -179,14 +174,6 @@ public class ScalaPlugin implements Plugin<Project> {
      */
     private void configureIdeModules(final Project project) {
         project.afterEvaluate(ignored -> {
-            // Only do this once all the IDE plugins have been registered already.
-            IdeaModule module = Optional.ofNullable(project.getExtensions().findByType(IdeaModel.class))
-                .map(IdeaModel::getModule)
-                .orElse(null);
-            if (module == null) {
-                return;
-            }
-
             getSourceSets(project).all(sourceSet -> {
                 // If somebody adds custom source sets for integration tests, etc. we cannot automatically
                 // figure out whether we should add those scala sources as `srcDir` or `testSrcDir`, so we
@@ -198,48 +185,21 @@ public class ScalaPlugin implements Plugin<Project> {
                     return;
                 }
 
-                SourceDirectorySet scalaDirectorySet =
-                    (SourceDirectorySet) sourceSet.getExtensions().findByName("scala");
-                if (scalaDirectorySet == null) {
+                boolean isTest = SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName());
+
+                SourceDirectorySet sds = (SourceDirectorySet) sourceSet.getExtensions().findByName("scala");
+                if (sds == null) {
                     logger.debug("Not configuring IDE module for source set '" + sourceSet.getName()
                         + "': No Scala directory set available.");
                     return;
                 }
 
-                boolean isTest = SourceSet.TEST_SOURCE_SET_NAME.equals(sourceSet.getName());
-                if (isTest) {
-                    module.setTestSourceDirs(union(module.getTestSourceDirs(), scalaDirectorySet.getSrcDirs()));
-                } else {
-                    module.setSourceDirs(union(module.getSourceDirs(), scalaDirectorySet.getSrcDirs()));
-                }
+                IdeaConfigurer.includeSourceDirs(project, sds.getSrcDirs(), isTest);
             });
 
-            ScalaPluginExtension extension = project.getExtensions().findByType(ScalaPluginExtension.class);
-            if (extension == null || extension.getScalaVersion() == null) {
-                logger.info("Not configuring the Scala SDK.");
-                return;
-            }
-
-            // Manually modify .iml files to include an <orderEntry /> node that refers to the Scala SDK
-            // Note that this unfortunately assumes that the SDK has been configured already. However,
-            // seeing that those are defined globally (i.e. independent of individual projects), it seems
-            // okay-ish to ask the users to define those once through a few clicks. Will fix this properly
-            // later.
-            module.getIml().withXml(xmlProvider -> {
-                Node node = xmlProvider.asNode();
-                for (Object obj : node.children()) {
-                    if (obj instanceof Node) {
-                        Node child = (Node) obj;
-                        if ("NewModuleRootManager".equals(child.attribute("name"))) {
-                            Map<String, String> attributes = new LinkedHashMap<>();
-                            attributes.put("type", "library");
-                            attributes.put("name", String.format("scala-sdk-%s", extension.getScalaVersion()));
-                            attributes.put("level", "application");
-                            child.appendNode("orderEntry", attributes);
-                        }
-                    }
-                }
-            });
+            ScalaPluginExtension extension = project.getExtensions().getByType(ScalaPluginExtension.class);
+            IdeaConfigurer.includeScalaSdkDependency(
+                project, String.format("scala-sdk-%s", extension.getScalaVersion()));
         });
     }
 
@@ -275,13 +235,6 @@ public class ScalaPlugin implements Plugin<Project> {
 
     private static SourceSetContainer getSourceSets(Project project) {
         return project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets();
-    }
-
-    private static <T> Set<T> union(Set<T> a, Set<T> b) {
-        Set<T> result = new HashSet<>();
-        if (a != null) result.addAll(a);
-        if (b != null) result.addAll(b);
-        return result;
     }
 
 }
