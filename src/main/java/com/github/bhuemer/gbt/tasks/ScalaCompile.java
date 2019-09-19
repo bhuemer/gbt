@@ -21,38 +21,93 @@
  */
 package com.github.bhuemer.gbt.tasks;
 
+import org.gradle.api.DefaultTask;
+import org.gradle.api.file.FileCollection;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
-import org.gradle.api.tasks.TaskAction;
-import org.gradle.api.tasks.compile.AbstractCompile;
+import org.gradle.api.tasks.*;
+import org.gradle.work.InputChanges;
 
 import java.io.File;
-import java.util.Set;
 
-public class ScalaCompile extends AbstractCompile {
+/**
+ * Compiles Scala source files.
+ */
+public class ScalaCompile extends DefaultTask {
 
     /** The logger instance for this task. */
     private static final Logger logger = Logging.getLogger(ScalaCompile.class);
 
     private String scalaVersion;
 
-    /** The JAR files that are necessary to compile */
-    private Set<File> scalacJars;
+    /** The JAR files containing the compiler and all its possible dependencies */
+    private FileCollection scalacClasspath;
+
+    /** The source files that we want to compile */
+    private FileCollection source;
+
+    private File destinationDir;
+
+    /** The compile classpath */
+    private FileCollection classpath;
+
+    @Input
+    public String getScalaVersion() {
+        return scalaVersion;
+    }
 
     public void setScalaVersion(String scalaVersion) {
         this.scalaVersion = scalaVersion;
     }
 
-    public void setScalacJars(Set<File> scalacJars) {
-        this.scalacJars = scalacJars;
+    @Classpath
+    public FileCollection getScalacClasspath() {
+        return scalacClasspath;
     }
 
-    @Override
-    @TaskAction
-    protected void compile() {
-        logger.info("Compiling using Scala " + scalaVersion);
+    public void setScalacClasspath(FileCollection scalacClasspath) {
+        this.scalacClasspath = scalacClasspath;
+    }
 
-        ScalaCompiler compiler = ScalaCompilerFactory.createCompiler(scalaVersion, scalacJars, logger);
+    @InputFiles
+    @SkipWhenEmpty
+    @PathSensitive(org.gradle.api.tasks.PathSensitivity.ABSOLUTE)
+    public FileCollection getSource() {
+        return source;
+    }
+
+    public void setSource(FileCollection source) {
+        this.source = source;
+    }
+
+    @Classpath
+    public FileCollection getClasspath() {
+        return classpath;
+    }
+
+    public void setClasspath(FileCollection classpath) {
+        this.classpath = classpath;
+    }
+
+    @OutputDirectory
+    public File getDestinationDir() {
+        return destinationDir;
+    }
+
+    public void setDestinationDir(File destinationDir) {
+        this.destinationDir = destinationDir;
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    @TaskAction
+    public void compile(InputChanges changes) {
+        logger.info("Compiling using Scala " + getScalaVersion());
+
+        ScalaCompiler compiler = ScalaCompilerFactory.createCompiler(
+            getScalaVersion(),
+            getScalacClasspath().getFiles(),
+            logger
+        );
         compiler.compile(
             getSource().getFiles(),
             getClasspath().getFiles(),

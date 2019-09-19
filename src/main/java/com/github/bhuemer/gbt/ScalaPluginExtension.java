@@ -43,7 +43,7 @@ public class ScalaPluginExtension {
     }
 
     /**
-     * Allows you to override the Scala version that you want to use.
+     * Allows you to configure the Scala version that you want to use.
      */
     @SuppressWarnings("unused")
     public void setScalaVersion(String scalaVersion) {

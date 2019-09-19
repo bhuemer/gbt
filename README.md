@@ -81,5 +81,5 @@ dependencies {
 
 - [ ] Actually implement / make use of incremental compilation. At the moment this plugin just uses the `RawCompiler` 
     as I wanted to sort out classpath and project set-up issues first before tackling incremental compilation.
-- [ ] Some performance issues like resolving dependencies too early in the build lifecycle
+- [ ] Scaladoc generation task
 - [ ] Better configuration for the compiler (e.g. allowing users to pass all the various language feature flags)

@@ -31,9 +31,15 @@ import org.hamcrest.Matcher;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -66,6 +72,32 @@ public class ScalaPluginTest {
 
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App.class").exists());
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App$.class").exists());
+        }
+    }
+
+    /**
+     */
+    @Test
+    public void compileScalaClassFilesAreIncludedInJarFiles() throws Exception {
+        try (GradleRunner runner = GradleRunner.forProject("testSimpleProject")) {
+            BuildResult result = runner.withArguments("assemble").build();
+
+            // Make sure that compileScala was executed despite not being invoked explicitly
+            assertThat(result.getTasks(), hasItem(was(":compileScala", TaskOutcome.SUCCESS)));
+            assertThat(result.getTasks(), hasItem(was(":jar", TaskOutcome.SUCCESS)));
+            assertThat(result.getTasks(), hasItem(was(":assemble", TaskOutcome.SUCCESS)));
+
+            File buildLibs = new File(runner.getProjectDir(), "build/libs");
+            File[] jarFiles = buildLibs.listFiles(file -> file.getName().endsWith(".jar"));
+            assertThat(jarFiles, arrayWithSize(1));
+
+            Set<String> jarFileEntryNames = collectZipFileEntryNames(jarFiles[0]);
+            assertThat(jarFileEntryNames, containsInAnyOrder(
+                "App$.class",
+                "App.class",
+                "META-INF/",
+                "META-INF/MANIFEST.MF"
+            ));
         }
     }
 
@@ -185,6 +217,22 @@ public class ScalaPluginTest {
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/EnumTypes.tasty").exists());
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/EnumTypes$ListEnum$.class").exists());
         }
+    }
+
+    // ------------------------------------------ Utility methods
+
+    /**
+     * Collects the names of all the ZIP entries that appear in the given file.
+     */
+    private static Set<String> collectZipFileEntryNames(File file) throws IOException {
+        Set<String> result = new HashSet<>();
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(file))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                result.add(entry.getName());
+            }
+        }
+        return result;
     }
 
     /**
