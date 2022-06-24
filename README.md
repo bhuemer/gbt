@@ -7,17 +7,16 @@ A plugin that enables the use of SBTs most recent compilers in Gradle Scala proj
 
 ## Installation
 
-GBT will hopefully soon be published as a Gradle plugin via [plugins.gradle.org](https://plugins.gradle.org/). Once 
-that has been approved, the plugin will be available to you in your `build.gradle` file:
+GBT is published as a Gradle plugin via [plugins.gradle.org](https://plugins.gradle.org/):
 
 ```groovy
 plugins {
-    id 'com.github.bhuemer.gbt'
+    id 'com.github.bhuemer.gbt' version '0.2'
 }
 
 // By default it will use Scala 2.13.8, but you can configure the version.
 scalac {
-    scalaVersion '2.13.0'
+    scalaVersion '2.13.8'
 }
 
 // The plugin needs to be able to resolve SBT and Scala library/compiler 
@@ -30,22 +29,7 @@ dependencies {
     // The plugin neither infers the Scala version from this dependency nor 
     // will it add it automatically for you. If you don't have it declared
     // compilation will fail.
-    implementation 'org.scala-lang:scala-library:2.13.0'
-}
-```
-
-In the meantime you can use this plugin by publishing it to your own local maven repository (`./gradlew publishToMavenLocal`), 
-for example, and then also including the following bit of configuration:
-
-```groovy
-buildscript {
-    repositories {
-        mavenLocal()
-    }
-
-    dependencies {
-        classpath "com.github.bhuemer.gbt:gbt:0.1-SNAPSHOT"
-    }
+    implementation 'org.scala-lang:scala-library:2.13.8'
 }
 ```
 
@@ -54,15 +38,15 @@ buildscript {
 Similar to the built-in Scala plugin this one mostly depends on [Zinc](https://github.com/sbt/zinc) for the actual
 compilation. The plugin will automatically resolve the correct compiler bridges for you based on the `scalaVersion`
 you have provided, but in more complicated cases you can also specify those manually. For example, this is how you 
-would configure a `build.gradle` file for Dotty / Scala 3:
+would configure a `build.gradle` file for Scala 3:
 
 ```groovy
 plugins {
-    id 'com.github.bhuemer.gbt'
+    id 'com.github.bhuemer.gbt' version '0.2'
 }
 
 scalac {
-    scalaVersion = '0.18.1-RC1'
+    scalaVersion = '3.0.2'
 }
 
 repositories {
@@ -70,10 +54,7 @@ repositories {
 }
 
 dependencies {
-    scalac 'ch.epfl.lamp:dotty-compiler_0.18:0.18.1-RC1'
-    scalac 'ch.epfl.lamp:dotty-sbt-bridge:0.18.1-RC1'
-    // Again, the library needs to be added manually:
-    implementation 'ch.epfl.lamp:dotty-library_0.18:0.18.1-RC1'
+    implementation "org.scala-lang:scala3-library_3:3.0.2"
 }
 ```
 
