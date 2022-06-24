@@ -35,9 +35,11 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  *
@@ -56,15 +58,26 @@ final class ScalaCompilerFactory {
                 findByName(classpath, "library");
 
                 compiler.apply(
-                    JavaConverters.collectionAsScalaIterable(files).toSeq(),
-                    JavaConverters.collectionAsScalaIterable(classpath).toSeq(),
-                    outputDir,
+                    convertFiles(files),
+                    convertFiles(classpath),
+                    outputDir.toPath(),
                     JavaConverters.collectionAsScalaIterable(Collections.<String>emptyList()).toSeq()
                 );
             } catch (CompileFailed ex) {
                 throw new GradleException("Compilation failed.", ex);
             }
         };
+    }
+
+    private static scala.collection.Seq<Path> convertFiles(Set<File> files) {
+        return JavaConverters.collectionAsScalaIterable(
+            files
+                .stream()
+                .map(File::toPath)
+                .collect(
+                    Collectors.toSet()
+                )
+        ).toSeq();
     }
 
     /**
@@ -95,14 +108,18 @@ final class ScalaCompilerFactory {
         Objects.requireNonNull(name, "The given name must not be null.");
         return jarFiles.stream()
             .filter(Objects::nonNull)
-            .filter(file -> file.getName().startsWith("scala-" + name) || file.getName().startsWith("dotty-" + name))
+            .filter(file ->
+                file.getName().startsWith("scala-" + name) ||
+                file.getName().startsWith("scala3-" + name) ||
+                file.getName().startsWith("dotty-" + name)
+            )
             .findFirst()
             .orElseThrow(() ->
                 new GradleException(
                     "Cannot find the JAR file for 'scala-" + name + "' or 'dotty-" + name + "' in '" + jarFiles + "' " +
                         "Did you forget to declare a dependency? Please make sure that the correct version of the " +
                         "scala library is on the compile classpath, e.g. by adding " +
-                        "`implementation 'org.scala-lang:scala-library:2.12.8'`.")
+                        "`implementation 'org.scala-lang:scala-library:2.13.8'`.")
             );
     }
 

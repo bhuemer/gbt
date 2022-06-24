@@ -30,8 +30,8 @@ public class ScalaPluginExtension {
     /** The name of the DSL block to use to configure the Scala plugin. */
     public static final String EXTENSION_NAME = "scalac";
 
-    /** By default we'll assume Scala 2.12 is used for Scala projects. */
-    private static final String DEFAULT_VERSION_SCALA = "2.12.8";
+    /** By default, we'll assume Scala 2.13 is used for Scala projects. */
+    private static final String DEFAULT_VERSION_SCALA = "2.13.8";
 
     private String scalaVersion;
 
@@ -50,6 +50,12 @@ public class ScalaPluginExtension {
     @SuppressWarnings("unused")
     public void setScalaVersion(String scalaVersion) {
         this.scalaVersion = scalaVersion;
+    }
+
+    /**
+     */
+    public boolean isScala3() {
+        return getScalaVersion().startsWith("3");
     }
 
     /**

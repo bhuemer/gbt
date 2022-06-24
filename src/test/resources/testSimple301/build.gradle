@@ -1,0 +1,20 @@
+plugins {
+    id 'com.github.bhuemer.gbt'
+    id 'application'
+}
+
+scalac {
+    scalaVersion = '3.0.1'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.scala-lang:scala3-library_3:3.0.1'
+}
+
+application {
+    mainClassName = 'App'
+}

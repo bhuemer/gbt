@@ -15,7 +15,7 @@ plugins {
     id 'com.github.bhuemer.gbt'
 }
 
-// By default it will use Scala 2.12.8, but you can configure the version.
+// By default it will use Scala 2.13.8, but you can configure the version.
 scalac {
     scalaVersion '2.13.0'
 }
@@ -66,7 +66,7 @@ scalac {
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
 }
 
 dependencies {

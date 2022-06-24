@@ -68,7 +68,7 @@ public class ScalaPluginTest {
     @Test
     public void compileScalaProducesClassFiles() throws Exception {
         try (GradleRunner runner = GradleRunner.forProject("testSimple")) {
-            BuildResult result = runner.withArguments("compileScala").build();
+            BuildResult result = runner.withArguments("compileScala", "--warning-mode", "all").build();
 
             assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
             assertThat(result.getTasks().get(1), was(":compileScala", TaskOutcome.SUCCESS));
@@ -135,6 +135,25 @@ public class ScalaPluginTest {
 
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App.class").exists());
             assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App$.class").exists());
+        }
+    }
+
+    /**
+     * Makes sure that Scala 3.0 project can be compiled successfully as well.
+     */
+    @Test
+    public void compileScalaWorksWithScala301() throws Exception {
+        try (GradleRunner runner = GradleRunner.forProject("testSimple301")) {
+            BuildResult result = runner.withArguments("run").build();
+
+            assertThat(result.getOutput(), containsString("Hello from Scala 3.0.1"));
+
+            assertThat(result.getTasks().get(0), was(":compileJava", TaskOutcome.NO_SOURCE));
+            assertThat(result.getTasks().get(1), was(":compileScala", TaskOutcome.SUCCESS));
+
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App.class").exists());
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App$.class").exists());
+            assertTrue(new File(runner.getProjectDir(), "build/classes/scala/main/App.tasty").exists());
         }
     }
 
